@@ -143,5 +143,8 @@ Select employe.nomemp , inscrit.codesemi, cours.libellecours
     left join cours on cours.codecours = seminaire.codecours
     where employe.numemp > 17;
 
-Select distinct employe.numemp , employe.nomemp , employe.prenomemp 
-    from employe inner join employe on superieur = numemp;
+Select * from employe;
+
+Select e.numemp , e.nomemp , e.prenomemp , e.superieur, s.numemp , s.nomemp, s.prenomemp, s.superieur
+    from employe e left join employe s
+        on e.superieur = s.numemp;
