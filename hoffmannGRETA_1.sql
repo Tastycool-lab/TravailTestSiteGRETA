@@ -313,7 +313,7 @@ Select employe.numemp, count(inscrit.numemp)nb_inscription
     group by employe.numemp;
     
 /*
-Combien y a t-il eu de jours de présence pour le séminaire BR0350216 ?
+Combien y a t-il eu de jours de présence pour le séminaire BR0350216 (nb jours) ?
 &
 Combien y a t il eu de jours de présence par séminaire , pour les séminaire qui ont eu lieu (codesemi, nb)
 */
