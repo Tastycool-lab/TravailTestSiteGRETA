@@ -314,7 +314,19 @@ Select employe.numemp, count(inscrit.numemp)nb_inscription
     
 /*
 Combien y a t-il eu de jours de présence pour le séminaire BR0350216 (nb jours) ?
-&
-Combien y a t il eu de jours de présence par séminaire , pour les séminaire qui ont eu lieu (codesemi, nb)
 */
+select count(codejour) nb_jours_participation , codesemi 
+    from participer 
+    where codesemi = 'BR0350216' 
+    group by codesemi ;
+    
+--Combien y a t il eu de jours de présence par séminaire , pour les séminaire qui ont eu lieu (codesemi, nb)    
+select count(participer.codejour) nb_jours_participation , participer.codesemi , seminaire.datedebutsem+cours.nbjours-1 date_fin_semi
+    from participer
+    inner join seminaire on seminaire.codesemi = participer.codesemi
+    inner join cours on cours.codecours = seminaire.codecours
+    where  seminaire.datedebutsem+cours.nbjours-1 < SYSDATE
+    group by participer.codesemi, seminaire.datedebutsem+cours.nbjours-1 ;
 
+--test
+select to_DATE(SYSDATE, 'DD/MM/YYYY') from dual;
