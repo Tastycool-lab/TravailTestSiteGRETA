@@ -248,8 +248,8 @@ select avg(finprevue-debutproj+1) nb_jour_moyen from projet;
  Select distinct seminaire.codesemi, seminaire.codecours, cours.libellecours, datedebutsem, datedebutsem+cours.nbjours date_de_fin
     from seminaire 
     inner join cours on cours.codecours = seminaire.codecours
-    where cours.libellecours like '%SQL%' and (select count(distinct participer.codesemi) 
-    from participer) >= 3 ;
+    where cours.libellecours like '%SQL%' and (select count(distinct inscrit.codesemi) 
+    from inscrit) >= 3 ;
 
 --diapo 71;
 /* 1 - on regroupe par codeprojet
@@ -320,13 +320,197 @@ select count(codejour) nb_jours_participation , codesemi
     where codesemi = 'BR0350216' 
     group by codesemi ;
     
---Combien y a t il eu de jours de présence par séminaire , pour les séminaire qui ont eu lieu (codesemi, nb)    
+--Combien y a t il eu de jours de présence par séminaire , pour les séminaire qui ont eu lieu (codesemi, nb)  
+--Correction: Pas besoin de inner join car les inscrit dans participer sont par logique terminé (sauf un séminaire est en cours ...)
 select count(participer.codejour) nb_jours_participation , participer.codesemi , seminaire.datedebutsem+cours.nbjours-1 date_fin_semi
     from participer
     inner join seminaire on seminaire.codesemi = participer.codesemi
     inner join cours on cours.codecours = seminaire.codecours
     where  seminaire.datedebutsem+cours.nbjours-1 < SYSDATE
     group by participer.codesemi, seminaire.datedebutsem+cours.nbjours-1 ;
+    
+--ratio de présence par séminaire (NBjours de rpésence / NBjours prévus)
+select inscrit.codesemi, count(inscrit.numemp) nb_emp
+from seminaire sem inner join inscrit
+    on sem.codesemi= inscrit.codesemi
+group by inscrit.codesemi;
+
+select participer.codesemi, round(count(*) / A.nb_emp* cours.nbjours, 2) ratio
+from participer inner join seminaire on seminaire.codesemi = participer.codesemi
+inner join cours on cours.codecours = seminaire.codecours
+inner join (select inscrit.codesemi, count(inscrit.numemp) nb_emp
+from seminaire sem inner join inscrit
+    on sem.codesemi= inscrit.codesemi
+group by inscrit.codesemi) A on A.codesemi = seminaire.codesemi
+group by participer.codesemi, cours.nbjours, a.nb_emp;
 
 --test
 select to_DATE(SYSDATE, 'DD/MM/YYYY') from dual;
+
+
+--Diapo 75 HAVING
+/*Salaire moyen par poste, pour les postes comportant plus de deux employés.*/
+Select AVG(salaire) , poste from employe group by poste having count(numemp) > 2;
+
+/*liste des séminaires, où il y a plus de 3 inscrit*/
+--Correction: le inner join est là pour obtenir le libelle du cours
+Select inscrit.codesemi , seminaire.codecours, cours.libellecours 
+    from employe 
+        inner join inscrit on employe.numemp = inscrit.numemp 
+        inner join seminaire on seminaire.codesemi = inscrit.codesemi
+        inner join cours on cours.codecours = seminaire.codecours
+        group by inscrit.codesemi , seminaire.codecours, cours.libellecours
+        having count(inscrit.numemp) > 3;
+    
+/*Salaire moyen par poste, pour les employés dont la prime est à null, et pour les postes comportant plus de deux employés*/
+--Correction: Meme raisonnement que la primière requete sauf qu'on ne prend en compte que les employés avec une prime null
+Select AVG(salaire), poste from employe where prime is null group by poste having count(numemp) > 2;
+--TEST 
+select * from employe where poste = 'C23';
+
+--Diapo 81 exercices LES SELECT IMBRIQUES
+ /*Liste des employés inscrits à au moins un séminaire auquiel s'est inscrit "JOLIBOIS"*/
+ --Correction ajout d'un DISTINCT un employé à peut s'incire à plusieurs séminaires aux quels s'est inscrit l'employé "JOLIEBOIS"
+ Select employe.numemp, employe.nomemp , inscrit.codesemi
+    from employe inner join inscrit 
+    on inscrit.numemp = employe.numemp
+    where inscrit.codesemi in 
+    (Select inscrit.codesemi 
+        from inscrit 
+        inner join employe 
+        on inscrit.numemp = employe.numemp 
+        where employe.nomemp = 'JOLIBOIS') 
+    AND nomemp not like 'JOLIBOIS';
+
+/*Liste des employés de poste B12 dont le salaire est égal à l'un des salaires des employés du poste B15(n°,nom,prenom)*/
+Select numemp , nomemp , prenomemp 
+    from employe 
+    where poste = 'B12' 
+        AND salaire in  (select salaire 
+                            from employe 
+                            where poste = 'B15');
+                            
+/*Liste des employés inscrits à un séminaires d'un cours de UML*/
+Select distinct employe.numemp , nomemp , prenomemp 
+    from employe
+        inner join inscrit on employe.numemp = inscrit.numemp 
+        inner join seminaire on seminaire.codesemi = inscrit.codesemi
+        inner join cours on cours.codecours = seminaire.codecours
+            where cours.libellecours in (Select cours.libellecours 
+                                    from cours 
+                                    where cours.libellecours like '%UML%');
+    
+/*Liste des employés n° nom prenom dont le gain (salaire + prime) est supérieur à 90% du salaire de son superieur hierachique*/                 
+Select e.numemp , e.nomemp , e.prenomemp , (e.salaire + coalesce(e.prime,0)) gain, (s.salaire * 0.9) S_Sup_90
+    from employe e left join employe s on e.superieur = s.numemp
+    where(e.salaire + coalesce(e.prime,0) > (Select salaire * 0.9 
+                                            from employe 
+                                            where e.superieur = numemp));
+                                            
+                                            
+
+--TEST
+Select * from employe where numemp = 2;
+
+Select e.numemp , e.nomemp , e.prenomemp , (e.salaire + coalesce(e.prime,0)) gain, (s.salaire * 0.9) S_Sup_90
+    from employe e left join employe s on e.superieur = s.numemp;
+                                            
+/*liste des employes dont le salaire est inférieur à la moyenne des salaires des employés travaillant sur le même projet.
+On prend en compte lest employés travaillant sur aucun projet*/
+Select numemp , nomemp , prenomemp , e.codeprojet
+    from employe e left join projet on projet.codeprojet  = e.codeprojet
+    where salaire < (select AVG(salaire) 
+                        from employe 
+                        where coalesce(codeprojet,'pas_de_projet' )= coalesce(e.codeprojet,'pas_de_projet' ));
+    
+--Diapo 87 UPDATE
+--Exercice
+select * from employe ;
+Update 
+    employe 
+set 
+    prime = 1000
+where 
+    numemp = 11;
+--Ici pas de clause where  car l'on veut mettre à jour toutes les lignes
+Update 
+    employe 
+set 
+    salaire = salaire + 150;
+
+update
+    employe
+set 
+    salaire = salaire + 5150
+where 
+    codeprojet = 'PR1';
+    
+    
+select numemp, salaire from employe where numemp in (16,17) ;
+update 
+    employe
+set
+    salaire = (select salaire from employe where numemp = 17)
+where numemp = 16;
+
+select min(salaire) from employe group by codeprojet;
+update
+    employe emp 
+set 
+    salaire = salaire + (salaire * 0.15)
+where 
+    salaire in (select min(salaire) from employe where emp.codeprojet = employe.codeprojet);
+
+select inscrit.numemp, employe.prime , count(*)
+    from inscrit 
+        inner join employe 
+        on employe.numemp = inscrit.numemp 
+        group by inscrit.numemp, employe.prime having count(inscrit.numemp)> 3;
+        
+/*Augmenté la prime des employés qui se sont inscrit à plus de 3 séminaires*/
+update
+    employe
+set
+    prime = prime  + 150
+where 
+    numemp in (select numemp from inscrit group by numemp having count(numemp)> 3);
+
+--Diapo 88 DELETE
+--Attention , certaine instructions seront refusées si il y a une perte d'intégrité référentielle.
+--exemple, je ne peut pas supprimer un client qui a une commande en cours.
+
+--par contre
+delete from cours where codecours = 'BR035';
+
+/*Ca a marché car il y a une suppression en cascade des enregistrements de la
+table seminaire. Tous les séminaires du cours BR035 ont été supprimés.*/
+
+-- pour rire on detruit tout en cascade:
+delete from cours;
+select * from cours;
+select * from seminaire;
+select * from inscrit;
+select * from participer;
+
+delete from inscrit where numemp = 1 and codesemi = 'BR0350216';
+
+delete from inscrit where 
+    numemp in (select numemp 
+                from employe 
+                where employe.codeprojet = 'PR1') 
+    AND codesemi in (select inscrit.codesemi 
+                        from inscrit 
+                        where seminaire.codecours = 'BR035');
+
+ROLLBACK;
+
+--Diapo 91 INSERT
+insert into cours (codecours, libellecours , nbjours)
+    values ('BR077', 'Cours SQL GRTA', 3);
+
+-- ne marchera pas
+insert into cours (codecours, libellecours, nbjours)
+values
+('BR060','informatique RGPD',5),
+('BR061','cuisine',6);
+
